@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify
 from dotenv import load_dotenv
 
@@ -9,6 +10,20 @@ from emailer import send_briefing
 load_dotenv()
 
 app = Flask(__name__)
+
+@app.route("/setup", methods=["POST"])
+def setup():
+    """One-time setup: initialize DB and create user."""
+    initialize_db()
+    user = get_user(user_id=1)
+    if not user:
+        from database import create_user
+        user_id = create_user(
+            email=os.getenv("GMAIL_ADDRESS"),
+            interests="artificial intelligence, European economics, geopolitics"
+        )
+        return jsonify({"status": "created", "user_id": user_id}), 200
+    return jsonify({"status": "already exists", "user": user}), 200
 
 @app.route("/run", methods=["POST"])
 def run_briefing():
@@ -46,12 +61,10 @@ def run_briefing():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route("/health", methods=["GET"])
 def health():
     """Simple health check so n8n can verify the app is alive."""
     return jsonify({"status": "ok"}), 200
-
 
 if __name__ == "__main__":
     initialize_db()
