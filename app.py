@@ -1,6 +1,8 @@
 import os
 from flask import Flask, jsonify
 from dotenv import load_dotenv
+import logging
+
 
 from database import initialize_db, get_user, filter_new_articles, mark_articles_sent
 from fetcher import fetch_articles
