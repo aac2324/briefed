@@ -5,10 +5,6 @@ import logging
 
 import requests
 
-@app.get("/net-test")
-def net_test():
-    r = requests.get("https://example.com", timeout=10)
-    return {"status": "ok", "status_code": r.status_code}
 
 
 from database import initialize_db, get_user, filter_new_articles, mark_articles_sent
@@ -76,6 +72,12 @@ def run_briefing():
 @app.route("/health")
 def health():
     return jsonify({"ok": True})
+
+
+@app.get("/net-test")
+def net_test():
+    r = requests.get("https://example.com", timeout=10)
+    return {"status": "ok", "status_code": r.status_code}
 
 if __name__ == "__main__":
     initialize_db()
