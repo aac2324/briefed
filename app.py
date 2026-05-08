@@ -11,6 +11,9 @@ load_dotenv()
 
 app = Flask(__name__)
 
+logging.basicConfig(level=logging.INFO)
+
+
 @app.route("/setup", methods=["POST"])
 def setup():
     """One-time setup: initialize DB and create user."""
@@ -61,10 +64,9 @@ def run_briefing():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/health", methods=["GET"])
+@app.route("/health")
 def health():
-    """Simple health check so n8n can verify the app is alive."""
-    return jsonify({"status": "ok"}), 200
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     initialize_db()
