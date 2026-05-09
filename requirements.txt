@@ -4,3 +4,4 @@ openai
 python-dotenv
 azure-ai-inference
 gunicorn
+resend

@@ -1,65 +1,64 @@
-import smtplib
+"""
+Email delivery via Resend's HTTPS API.
+
+We're not using Gmail SMTP because Render's free tier blocks all outbound
+SMTP traffic (any port). HTTPS goes through fine, so we use Resend.
+
+Required env vars:
+  RESEND_API_KEY  — from https://resend.com/api-keys
+  SENDER_ADDRESS  — defaults to onboarding@resend.dev (works without
+                    domain verification, but the recipient must be the
+                    email you signed up to Resend with)
+"""
+
 import os
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 from dotenv import load_dotenv
 
 load_dotenv()
 
-GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+resend.api_key = os.getenv("RESEND_API_KEY")
+SENDER_ADDRESS = os.getenv("SENDER_ADDRESS", "onboarding@resend.dev")
+
 
 def send_briefing(to_email: str, summary: str):
-    """
-    Sends the daily briefing email.
-    
-    Args:
-        to_email: recipient email address
-        summary: the formatted summary string from summarizer.py
-    """
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "📰 Your Daily Briefed Digest"
-    msg["From"] = GMAIL_ADDRESS
-    msg["To"] = to_email
-
-    # Plain text version
-    text_body = f"""
-Your Daily Briefed Digest
---------------------------
-
-{summary}
-
---------------------------
-Briefed — your personal AI news agent
-    """
-
-    # HTML version (cleaner in email clients)
+    """Send the daily briefing email via Resend HTTPS API."""
     html_body = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px;">
-        <h2 style="color: #333;">📰 Your Daily Briefed Digest</h2>
-        <hr style="border: none; border-top: 1px solid #eee;">
-        <div style="line-height: 1.8; color: #444;">
-            {summary.replace(chr(10), '<br>')}
-        </div>
-        <hr style="border: none; border-top: 1px solid #eee;">
-        <p style="color: #999; font-size: 12px;">
-            Briefed — your personal AI news agent
-        </p>
-    </body>
-    </html>
-    """
+<html>
+  <body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px;">
+    <h2 style="color: #333;">📰 Your Daily Briefed Digest</h2>
+    <hr style="border: none; border-top: 1px solid #eee;">
+    <div style="line-height: 1.8; color: #444;">
+      {summary.replace(chr(10), '<br>')}
+    </div>
+    <hr style="border: none; border-top: 1px solid #eee;">
+    <p style="color: #999; font-size: 12px;">
+      Briefed — your personal AI news agent
+    </p>
+  </body>
+</html>
+"""
 
-    msg.attach(MIMEText(text_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
+    text_body = (
+        "Your Daily Briefed Digest\n"
+        "--------------------------\n"
+        f"{summary}\n"
+        "--------------------------\n"
+        "Briefed — your personal AI news agent\n"
+    )
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
-        server.sendmail(GMAIL_ADDRESS, to_email, msg.as_string())
-        print(f"✅ Briefing sent to {to_email}")
+    response = resend.Emails.send({
+        "from": SENDER_ADDRESS,
+        "to": [to_email],
+        "subject": "📰 Your Daily Briefed Digest",
+        "html": html_body,
+        "text": text_body,
+    })
+
+    print(f"✅ Briefing sent to {to_email} (resend id: {response.get('id')})")
+    return response
 
 
-# Quick test
 if __name__ == "__main__":
     from fetcher import fetch_articles
     from summarizer import summarize_articles
@@ -67,4 +66,6 @@ if __name__ == "__main__":
     interests = "artificial intelligence, European economics"
     articles = fetch_articles(interests)
     summary = summarize_articles(articles, interests)
-    send_briefing(GMAIL_ADDRESS, summary)
+    # In local testing, send to whoever you registered Resend with.
+    test_recipient = os.getenv("TEST_RECIPIENT", SENDER_ADDRESS)
+    send_briefing(test_recipient, summary)
