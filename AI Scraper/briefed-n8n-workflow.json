@@ -1,0 +1,105 @@
+{
+  "name": "Briefed Daily",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 7,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Daily 7am Berlin",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://briefed-eflb.onrender.com/run",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Trigger Briefed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 60000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer re_REPLACE_WITH_YOUR_RESEND_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"onboarding@resend.dev\",\n  \"to\": [\"REPLACE_WITH_YOUR_EMAIL@example.com\"],\n  \"subject\": \"🚨 Briefed daily run failed\",\n  \"text\": \"The Briefed pipeline failed.\\n\\nTime: {{ $now }}\\nHTTP status: {{ $json.error?.httpCode || 'n/a' }}\\nMessage: {{ $json.error?.message || JSON.stringify($json) }}\"\n}",
+        "options": {}
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Send Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 460]
+    }
+  ],
+  "connections": {
+    "Daily 7am Berlin": {
+      "main": [
+        [
+          {
+            "node": "Trigger Briefed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Briefed": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  },
+  "pinData": {},
+  "versionId": "00000000-0000-0000-0000-000000000000",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
