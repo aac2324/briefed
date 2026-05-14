@@ -3,14 +3,15 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "briefed.db")
 
+
 def get_connection():
     return sqlite3.connect(DB_PATH)
+
 
 def initialize_db():
     """Creates tables if they don't exist yet."""
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,7 +19,6 @@ def initialize_db():
             interests TEXT NOT NULL
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS articles_sent (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,9 +28,9 @@ def initialize_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
-
     conn.commit()
     conn.close()
+
 
 def get_user(user_id: int = 1) -> dict | None:
     """Retrieves user preferences by ID. Defaults to user 1."""
@@ -42,6 +42,7 @@ def get_user(user_id: int = 1) -> dict | None:
     if row:
         return {"id": row[0], "email": row[1], "interests": row[2]}
     return None
+
 
 def create_user(email: str, interests: str) -> int:
     """Creates a new user and returns their ID."""
@@ -56,6 +57,7 @@ def create_user(email: str, interests: str) -> int:
     conn.close()
     return user_id
 
+
 def update_interests(user_id: int, interests: str):
     """Updates a user's interests string."""
     conn = get_connection()
@@ -66,6 +68,7 @@ def update_interests(user_id: int, interests: str):
     )
     conn.commit()
     conn.close()
+
 
 def filter_new_articles(user_id: int, articles: list[dict]) -> list[dict]:
     """Removes articles whose URLs have already been sent to this user."""
@@ -78,6 +81,7 @@ def filter_new_articles(user_id: int, articles: list[dict]) -> list[dict]:
     sent_urls = {row[0] for row in cursor.fetchall()}
     conn.close()
     return [a for a in articles if a["url"] not in sent_urls]
+
 
 def mark_articles_sent(user_id: int, articles: list[dict]):
     """Records articles as sent so they won't be repeated."""
@@ -92,27 +96,44 @@ def mark_articles_sent(user_id: int, articles: list[dict]):
     conn.close()
 
 
+def ensure_default_user():
+    """
+    On Render's free tier the SQLite file is wiped on every cold start,
+    so we re-seed user 1 from environment variables on every boot if
+    they don't already exist. Configure these env vars in Render:
+
+        BRIEFED_USER_EMAIL     — the inbox the briefing is sent to
+        BRIEFED_USER_INTERESTS — comma-separated interest keywords
+    """
+    if get_user(1) is not None:
+        return  # Already seeded.
+
+    email = os.getenv("BRIEFED_USER_EMAIL")
+    interests = os.getenv("BRIEFED_USER_INTERESTS")
+    if not email or not interests:
+        # Don't crash — just skip seeding. The /run endpoint will return
+        # a clearer error when it can't find a user.
+        print(
+            "⚠️  database.py: BRIEFED_USER_EMAIL or BRIEFED_USER_INTERESTS "
+            "not set; skipping default user seed."
+        )
+        return
+
+    create_user(email=email, interests=interests)
+    print(f"✅ database.py: seeded default user with email={email}")
+
+
+# --- Auto-init on import ----------------------------------------------------
+# Runs once when gunicorn imports any module that does `import database`.
+# Safe to call repeatedly because both functions are idempotent (CREATE TABLE
+# IF NOT EXISTS, and ensure_default_user checks before inserting).
+initialize_db()
+ensure_default_user()
+# ---------------------------------------------------------------------------
+
+
 # Quick test
 if __name__ == "__main__":
-    initialize_db()
     print("✅ Database initialized")
-
-    # Create test user
-    user_id = create_user(
-        email="your@gmail.com",
-        interests="artificial intelligence, European economics"
-    )
-    print(f"✅ User created with ID: {user_id}")
-
-    # Retrieve user
-    user = get_user(user_id)
-    print(f"✅ User retrieved: {user}")
-
-    # Test deduplication
-    articles = [
-        {"url": "https://example.com/article1", "title": "Test 1"},
-        {"url": "https://example.com/article2", "title": "Test 2"}
-    ]
-    mark_articles_sent(user_id, articles)
-    new_articles = filter_new_articles(user_id, articles)
-    print(f"✅ Deduplication works — new articles after marking: {len(new_articles)} (should be 0)")
+    user = get_user(1)
+    print(f"✅ User 1: {user}")
